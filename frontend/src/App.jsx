@@ -31,9 +31,9 @@ const GlobalSocketListener = () => {
     const userId = user._id || user.id; 
 
     // THE FIX: Forcing 'websocket' transport kills the annoying console errors!
-    const socket = io(import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000', {
-      transports: ['websocket']
-    });
+const socket = io(import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000', {
+  transports: import.meta.env.PROD ? ['polling', 'websocket'] : ['websocket']
+});
 
     socket.on(`refundAlert_${userId}`, (data) => {
       toast.error(data.message, {
