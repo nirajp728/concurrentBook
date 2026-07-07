@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Environment Variables (CRITICAL)
+.env
+.env.production
+.env.development
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Docker
+docker-volume-data/
+
+# OS/Editor
+.DS_Store
+.vscode/
+.idea/

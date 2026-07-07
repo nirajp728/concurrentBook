@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    /* This removes the ugly blue tap highlight on mobile devices */
+    -webkit-tap-highlight-color: transparent; 
+  }
+
+  body {
+    /* Pure CSS equivalent of bg-zinc-950 and text-zinc-100 */
+    background-color: #09090b; 
+    color: #f4f4f5;
+    
+    /* Pure CSS equivalent of antialiased */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    
+    overflow-x: hidden; 
+  }
+
+  ::selection {
+    background-color: #dc2626;
+    color: #ffffff;
+  }
+}
+
+@layer utilities {
+  /* ==========================================
+     THE "INVISIBLE SCROLLBAR" TRICK
+     ========================================== */
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* ==========================================
+     iOS SAFE AREA 
+     ========================================== */
+  .pb-safe-bottom {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
+  }
+}

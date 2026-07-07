@@ -1,0 +1,33 @@
+# Dependencies (Crucial: Let Docker install its own fresh production dependencies)
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment Variables (Crucial: Prevent baking secret keys into the built image)
+.env
+.env.production
+.env.development
+.env.local
+
+# Git configurations
+.git
+.gitignore
+.github
+
+# Docker documentation
+Dockerfile
+docker-compose.yml
+
+# IDEs and Text Editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS junk files
+.DS_Store
+Thumbs.db

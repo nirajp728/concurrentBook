@@ -1,0 +1,150 @@
+name: Production Deployment Pipeline
+
+on:
+  push:
+    branches:
+      - main 
+
+env:
+  ECR_REPOSITORY: concurrentbook-backend
+
+jobs:
+  build-and-push-backend:
+    name: Build & Push Backend to AWS ECR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }} # Now pulling from your secrets!
+
+      - name: 🐳 Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: 🏗️ Build, Tag, and Push Docker Image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        working-directory: ./backend 
+        run: |
+          echo "Building Docker image..."
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          
+          echo "Pushing Docker image to ECR..."
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+  deploy-to-ec2:
+    name: Auto-Configure & Deploy to EC2
+    needs: build-and-push-backend
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 🚀 Connect to EC2, Write Files, and Deploy
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          ELASTICSEARCH_URL: ${{ secrets.ELASTICSEARCH_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_EXPIRES_IN: ${{ secrets.JWT_EXPIRES_IN }} # Added your new secret
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          VITE_FRONTEND_URL: ${{ secrets.VITE_FRONTEND_URL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          SQS_QUEUE_URL: ${{ secrets.SQS_QUEUE_URL }} # Added your new secret
+          AWS_REGION: ${{ secrets.AWS_REGION }} # Added your new secret
+        with:
+          host: ${{ secrets.EC2_HOST_IP }}
+          username: ${{ secrets.EC2_USERNAME }} # Now pulling from your secrets!
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: MONGO_URI,REDIS_URL,ELASTICSEARCH_URL,JWT_SECRET,JWT_EXPIRES_IN,STRIPE_SECRET_KEY,STRIPE_WEBHOOK_SECRET,VITE_FRONTEND_URL,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,S3_BUCKET_NAME,SQS_QUEUE_URL,AWS_REGION
+          script: |
+            mkdir -p concurrentbook-server
+            cd concurrentbook-server
+            
+            echo "Writing Caddyfile for SSL routing..."
+            cat << EOF > Caddyfile
+            ${{ secrets.DOMAIN_NAME }} {
+                reverse_proxy backend:5000
+            }
+            EOF
+            
+            echo "Writing docker-compose.yml..."
+            cat << EOF > docker-compose.yml
+            version: '3.8'
+            services:
+              caddy:
+                image: caddy:latest
+                restart: unless-stopped
+                ports:
+                  - "80:80"
+                  - "443:443"
+                volumes:
+                  - ./Caddyfile:/etc/caddy/Caddyfile
+                  - caddy_data:/data 
+                  - caddy_config:/config
+              backend:
+                image: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:latest
+                restart: always
+                ports:
+                  - "5000:5000"
+                env_file:
+                  - .env
+            volumes:
+              caddy_data:
+              caddy_config:
+            EOF
+            
+            echo "Writing .env file dynamically..."
+            cat << EOF > .env
+            PORT=5000
+            NODE_ENV=production
+            MONGO_URI=$MONGO_URI
+            REDIS_URL=$REDIS_URL
+            ELASTICSEARCH_URL=$ELASTICSEARCH_URL
+            JWT_SECRET=$JWT_SECRET
+            JWT_EXPIRES_IN=$JWT_EXPIRES_IN
+            STRIPE_SECRET_KEY=$STRIPE_SECRET_KEY
+            STRIPE_WEBHOOK_SECRET=$STRIPE_WEBHOOK_SECRET
+            AWS_REGION=$AWS_REGION
+            AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+            AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+            S3_BUCKET_NAME=$S3_BUCKET_NAME
+            SQS_QUEUE_URL=$SQS_QUEUE_URL
+            VITE_FRONTEND_URL=$VITE_FRONTEND_URL
+            EOF
+            
+            # Secure the .env file so only the server owner can read it
+            chmod 600 .env
+            
+            echo "Authenticating EC2 with AWS ECR..."
+            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+            
+            echo "Pulling latest image and deploying..."
+            docker-compose pull
+            docker-compose up -d
+
+  notify:
+    name: Deployment Notification
+    needs: deploy-to-ec2
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check Status
+        run: |
+          if [ "${{ needs.deploy-to-ec2.result }}" = "success" ]; then
+            echo "🚀 Application successfully deployed and live on EC2!"
+          else
+            echo "❌ Deployment failed. Check the GitHub Actions logs."
+            exit 1
+          fi
