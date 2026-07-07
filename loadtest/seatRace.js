@@ -4,7 +4,7 @@ import { Counter } from 'k6/metrics';
 
 const BASE_URL = 'https://concurrentbook.duckdns.org/api';
 const USER_COUNT = 50;
-const TARGET_EVENT_ID = 'PASTE_EVENT_ID_HERE';
+const TARGET_EVENT_ID = '6a3aef3e8ed346703d0b6f89';
 const TARGET_SEAT = 'A1';
 
 const successCount = new Counter('booking_success');
