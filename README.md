@@ -2,7 +2,7 @@
 
 A full-stack, production-deployed ticket booking system built to solve one core engineering problem: **guaranteeing that two people can never book the same seat, even under heavy concurrent load** — while keeping payments safe, fast, and free of race conditions.
 
-**Live demo:** `https://concurrentbook.duckdns.org` *(backend infrastructure is torn down between test sessions to control cost — see [Deployment](#deployment--infrastructure))*
+**Live demo:** `https://main.d1349gw0nhkkde.amplifyapp.com/` *(backend infrastructure is torn down between test sessions to control cost — see [Deployment](#deployment--infrastructure))*
 
 ---
 
