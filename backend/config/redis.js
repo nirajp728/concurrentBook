@@ -7,6 +7,7 @@ let redisClient;
 try {
   redisClient = new Redis(process.env.REDIS_URL, {
     maxRetriesPerRequest: 1,
+    tls: {}, // Required for AWS ElastiCache clusters with "Transit encryption: Required" (rediss:// scheme)
     retryStrategy(times) {
       if (times > 3) {
         console.warn('⚠️ Redis connection failed. Proceeding with local memory fallback.');
