@@ -1,0 +1,4 @@
+aws_setup
+k6_output.txt
+env_secrets_github_actions
+api_endpoints
