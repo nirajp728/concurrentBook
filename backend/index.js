@@ -22,6 +22,7 @@ import uploadRoutes from './routes/uploadRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import { stripeWebhook } from './controllers/bookingController.js';
 import rateLimiter from './middleware/rateLimiter.js';
+import adminRoutes from './routes/adminRoutes.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -83,7 +84,7 @@ app.use('/api/events', eventRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/users', userRoutes);
-
+app.use('/api/admin', adminRoutes);
 app.get('/api/health', async (req, res) => {
   try {
     const redisPing = await redisClient.ping();

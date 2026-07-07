@@ -7,11 +7,9 @@ import toast from 'react-hot-toast';
 const Dashboard = () => {
   const navigate = useNavigate();
   
-  // State to hold the REAL data from your backend
   const [stats, setStats] = useState({ users: 0, events: 0, bookings: 0, load: '0%' });
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch the live stats when the dashboard loads
   useEffect(() => {
     const fetchStats = async () => {
       try {
@@ -27,7 +25,6 @@ const Dashboard = () => {
 
     fetchStats();
     
-    // Refresh server load every 10 seconds for a real-time "Live Dashboard" feel
     const interval = setInterval(fetchStats, 10000);
     return () => clearInterval(interval);
   }, []);
@@ -42,14 +39,12 @@ const Dashboard = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 pb-20 animate-fade-in">
       
-      {/* HEADER SECTION */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
         <div>
           <h1 className="text-3xl md:text-4xl font-black text-white tracking-wide">System Overview</h1>
           <p className="text-zinc-400 font-medium mt-1">Real-time metrics and administration routing.</p>
         </div>
         
-        {/* ACTION BUTTONS */}
         <div className="flex gap-3 w-full md:w-auto">
           <button 
             onClick={() => navigate('/admin/users')} 
@@ -66,7 +61,6 @@ const Dashboard = () => {
         </div>
       </div>
       
-      {/* METRICS GRID */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
         {metrics.map((m, i) => {
           const Icon = m.icon;
@@ -88,7 +82,6 @@ const Dashboard = () => {
         })}
       </div>
 
-      {/* SYSTEM STATUS WIDGET */}
       <div className="bg-zinc-900/30 rounded-3xl border border-zinc-800 border-dashed p-12 flex flex-col items-center justify-center text-center animate-slide-up delay-200">
         <Settings size={48} className={`mb-6 text-zinc-700 ${isLoading ? 'animate-pulse' : 'animate-[spin_10s_linear_infinite]'}`} />
         <h2 className="text-2xl font-black text-white mb-2">All Systems Operational</h2>

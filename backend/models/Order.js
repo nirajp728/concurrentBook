@@ -7,12 +7,12 @@ const orderSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   status: {
     type: String,
-    enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'],
+    enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'REFUNDED'],
     default: 'PENDING'
   },
   stripePaymentIntentId: { type: String, required: true, unique: true },
-  idempotencyKey: { type: String, required: true, unique: true }, // double-click / retry protection
-  holdExpiry: { type: Date, required: true }, // cleanup job frees seats past this, unless PROCESSING/terminal
+  idempotencyKey: { type: String, required: true, unique: true },
+  holdExpiry: { type: Date, required: true },
   failureReason: { type: String }
 }, { timestamps: true });
 

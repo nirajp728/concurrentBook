@@ -4,9 +4,6 @@ import crypto from 'crypto';
 import Event from '../models/Event.js';
 import os from 'os';
 
-// ==========================================
-// AWS S3 CLIENT INITIALIZATION
-// ==========================================
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
   credentials: {
@@ -15,15 +12,10 @@ const s3Client = new S3Client({
   }
 });
 
-// ==========================================
-// 1. GET LOGGED-IN USER PROFILE
-// ==========================================
 export const getUserProfile = async (req, res) => {
   try {
-    // The .populate() command replaces the raw Event ID in the history 
-    // array with the actual Event document so the React frontend can read the title.
     const user = await User.findById(req.user.id || req.user._id)
-      .populate('bookingHistory.eventId', 'title date posterUrl') 
+      .populate('bookingHistory.eventId', 'title date posterUrl')
       .select('-password');
 
     if (!user) {
@@ -37,36 +29,29 @@ export const getUserProfile = async (req, res) => {
   }
 };
 
-// ==========================================
-// 2. GET ALL USERS (Admin Dashboard)
-// ==========================================
 export const getUsers = async (req, res) => {
   try {
     const { search } = req.query;
     let query = {};
-    
-    // If the admin types in the search box, filter MongoDB by email
+
     if (search) {
-      query = { email: { $regex: search, $options: 'i' } }; // 'i' makes it case-insensitive
+      query = { email: { $regex: search, $options: 'i' } };
     }
 
-    // Fetch users, explicitly EXCLUDING the password hash for security
     const users = await User.find(query).select('-password').sort({ createdAt: -1 });
-    
-    // Map the users to include real booking counts and wallet balances!
+
     const usersWithDetails = users.map(user => {
-      // Calculate how many SUCCESSFUL bookings this user has made
-      const successfulBookings = user.bookingHistory 
-        ? user.bookingHistory.filter(booking => booking.status === 'SUCCESS').length 
+      const successfulBookings = user.bookingHistory
+        ? user.bookingHistory.filter(booking => booking.status === 'SUCCESS').length
         : 0;
 
       return {
         id: user._id,
-        name: user.name, 
+        name: user.name,
         email: user.email,
         role: user.role,
-        wallet: user.wallet || 0,     // Expose wallet balance to Admin
-        bookings: successfulBookings  // Replaced the placeholder with REAL data!
+        wallet: user.wallet || 0,
+        bookings: successfulBookings
       };
     });
 
@@ -77,21 +62,17 @@ export const getUsers = async (req, res) => {
   }
 };
 
-// ==========================================
-// 3. DELETE USER (Admin Only)
-// ==========================================
 export const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // Safety Check: Prevent admins from accidentally deleting themselves!
+
     const currentAdminId = req.user.id || req.user._id;
     if (currentAdminId && currentAdminId === id) {
       return res.status(400).json({ message: "Action Denied: You cannot delete your own admin account." });
     }
 
     const deletedUser = await User.findByIdAndDelete(id);
-    
+
     if (!deletedUser) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -103,44 +84,34 @@ export const deleteUser = async (req, res) => {
   }
 };
 
-// ==========================================
-// 4. UPLOAD & UPDATE PROFILE PICTURE (S3)
-// ==========================================
 export const uploadProfilePicture = async (req, res) => {
-  // req.file is provided by the Multer middleware in your routes
   if (!req.file) {
     return res.status(400).json({ message: 'No image file provided' });
   }
 
-  const userId = req.user.id || req.user._id; 
+  const userId = req.user.id || req.user._id;
 
   try {
-    // 1. Generate a unique, secure filename
     const randomHex = crypto.randomBytes(8).toString('hex');
     const originalNameCleaned = req.file.originalname.replace(/[^a-zA-Z0-9.]/g, '-');
     const fileName = `profiles/${userId}-${randomHex}-${originalNameCleaned}`;
 
-    // 2. Prepare the AWS Upload Command
     const command = new PutObjectCommand({
-      Bucket: process.env.S3_BUCKET_NAME, // Matches your .env exactly
+      Bucket: process.env.S3_BUCKET_NAME,
       Key: fileName,
-      Body: req.file.buffer, // Raw image data from RAM
-      ContentType: req.file.mimetype, // e.g., 'image/jpeg'
+      Body: req.file.buffer,
+      ContentType: req.file.mimetype,
     });
 
-    // 3. Fire it off to AWS
     await s3Client.send(command);
 
-    // 4. Construct the public URL where the image now lives
     const imageUrl = `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
 
-    // 5. Update the user's profile in MongoDB
     await User.findByIdAndUpdate(userId, { profilePicture: imageUrl });
 
-    // 6. Send the new URL back to the React app
-    res.status(200).json({ 
+    res.status(200).json({
       message: 'Profile picture updated successfully',
-      imageUrl: imageUrl 
+      imageUrl: imageUrl
     });
 
   } catch (error) {
@@ -149,20 +120,11 @@ export const uploadProfilePicture = async (req, res) => {
   }
 };
 
-
-
-// ==========================================
-// 5. GET SYSTEM STATS (Admin Dashboard)
-// ==========================================
 export const getSystemStats = async (req, res) => {
   try {
-    // 1. Count total users
     const totalUsers = await User.countDocuments();
-
-    // 2. Count active events
     const totalEvents = await Event.countDocuments();
 
-    // 3. Count total successful bookings across all users using MongoDB Aggregation
     const bookingStats = await User.aggregate([
       { $unwind: "$bookingHistory" },
       { $match: { "bookingHistory.status": "SUCCESS" } },
@@ -170,10 +132,8 @@ export const getSystemStats = async (req, res) => {
     ]);
     const totalBookings = bookingStats.length > 0 ? bookingStats[0].totalBookings : 0;
 
-    // 4. Calculate REAL Live Server Load (CPU Usage)
-    const loadAvg = os.loadavg()[0]; // 1-minute load average
+    const loadAvg = os.loadavg()[0];
     const coreCount = os.cpus().length;
-    // Calculate percentage and cap it at 100%
     const serverLoad = Math.min(100, Math.round((loadAvg / coreCount) * 100));
 
     res.status(200).json({
@@ -185,5 +145,64 @@ export const getSystemStats = async (req, res) => {
   } catch (error) {
     console.error("Error fetching system stats:", error);
     res.status(500).json({ message: 'Failed to fetch system statistics' });
+  }
+};
+
+// ==========================================
+// 6. ADJUST USER WALLET (Admin Only)
+// Credits or debits any user's wallet. Positive amount = credit, negative = debit.
+// ==========================================
+export const adjustUserWallet = async (req, res) => {
+  const { id } = req.params;
+  const { amount, description } = req.body;
+
+  const parsedAmount = Number(amount);
+  if (isNaN(parsedAmount) || parsedAmount === 0) {
+    return res.status(400).json({ message: 'Amount must be a non-zero number' });
+  }
+
+  try {
+    if (parsedAmount < 0) {
+      const updated = await User.findOneAndUpdate(
+        { _id: id, wallet: { $gte: Math.abs(parsedAmount) } },
+        {
+          $inc: { wallet: parsedAmount },
+          $push: {
+            walletHistory: {
+              transactionType: 'DEBIT',
+              amount: Math.abs(parsedAmount),
+              description: description || 'Admin wallet deduction'
+            }
+          }
+        },
+        { new: true }
+      ).select('-password');
+
+      if (!updated) {
+        return res.status(400).json({ message: 'Insufficient balance for this deduction' });
+      }
+      return res.status(200).json(updated);
+    } else {
+      const updated = await User.findByIdAndUpdate(
+        id,
+        {
+          $inc: { wallet: parsedAmount },
+          $push: {
+            walletHistory: {
+              transactionType: 'CREDIT',
+              amount: parsedAmount,
+              description: description || 'Admin wallet credit'
+            }
+          }
+        },
+        { new: true }
+      ).select('-password');
+
+      if (!updated) return res.status(404).json({ message: 'User not found' });
+      return res.status(200).json(updated);
+    }
+  } catch (error) {
+    console.error('Error adjusting wallet:', error);
+    res.status(500).json({ message: 'Failed to adjust wallet', error: error.message });
   }
 };
