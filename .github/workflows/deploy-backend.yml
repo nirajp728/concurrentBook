@@ -3,7 +3,7 @@ name: Production Deployment Pipeline
 on:
   push:
     branches:
-      - main 
+      - main
 
 env:
   ECR_REPOSITORY: concurrentbook-backend
@@ -22,7 +22,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }} # Now pulling from your secrets!
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: 🐳 Login to Amazon ECR
         id: login-ecr
@@ -32,20 +32,63 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
-        working-directory: ./backend 
+        working-directory: ./backend
         run: |
           echo "Building Docker image..."
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
-          
+
           echo "Pushing Docker image to ECR..."
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-  deploy-to-ec2:
-    name: Auto-Configure & Deploy to EC2
+  setup-ec2:
+    name: Install Docker & AWS CLI on EC2
     needs: build-and-push-backend
     runs-on: ubuntu-latest
-    
+
+    steps:
+      - name: 🔧 Bootstrap EC2 (idempotent — skips if already installed)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST_IP }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            if ! command -v docker &> /dev/null; then
+              echo "Installing Docker..."
+              sudo apt-get update -y
+              sudo apt-get install -y ca-certificates curl gnupg
+              sudo install -m 0755 -d /etc/apt/keyrings
+              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+              sudo chmod a+r /etc/apt/keyrings/docker.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+              sudo apt-get update -y
+              sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+              sudo usermod -aG docker $USER
+            else
+              echo "Docker already installed, skipping."
+            fi
+
+            if ! command -v aws &> /dev/null; then
+              echo "Installing AWS CLI..."
+              sudo apt-get install -y unzip curl
+              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+              unzip -q awscliv2.zip
+              sudo ./aws/install
+              rm -rf awscliv2.zip aws/
+            else
+              echo "AWS CLI already installed, skipping."
+            fi
+
+            docker --version
+            docker compose version
+            aws --version
+
+  deploy-to-ec2:
+    name: Auto-Configure & Deploy to EC2
+    needs: setup-ec2
+    runs-on: ubuntu-latest
+
     steps:
       - name: 🚀 Connect to EC2, Write Files, and Deploy
         uses: appleboy/ssh-action@v1.0.3
@@ -54,31 +97,30 @@ jobs:
           REDIS_URL: ${{ secrets.REDIS_URL }}
           ELASTICSEARCH_URL: ${{ secrets.ELASTICSEARCH_URL }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          JWT_EXPIRES_IN: ${{ secrets.JWT_EXPIRES_IN }} # Added your new secret
+          JWT_EXPIRES_IN: ${{ secrets.JWT_EXPIRES_IN }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           VITE_FRONTEND_URL: ${{ secrets.VITE_FRONTEND_URL }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
-          SQS_QUEUE_URL: ${{ secrets.SQS_QUEUE_URL }} # Added your new secret
-          AWS_REGION: ${{ secrets.AWS_REGION }} # Added your new secret
         with:
           host: ${{ secrets.EC2_HOST_IP }}
-          username: ${{ secrets.EC2_USERNAME }} # Now pulling from your secrets!
+          username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: MONGO_URI,REDIS_URL,ELASTICSEARCH_URL,JWT_SECRET,JWT_EXPIRES_IN,STRIPE_SECRET_KEY,STRIPE_WEBHOOK_SECRET,VITE_FRONTEND_URL,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,S3_BUCKET_NAME,SQS_QUEUE_URL,AWS_REGION
+          envs: MONGO_URI,REDIS_URL,ELASTICSEARCH_URL,JWT_SECRET,JWT_EXPIRES_IN,STRIPE_SECRET_KEY,STRIPE_WEBHOOK_SECRET,VITE_FRONTEND_URL,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,S3_BUCKET_NAME
           script: |
             mkdir -p concurrentbook-server
             cd concurrentbook-server
-            
+
             echo "Writing Caddyfile for SSL routing..."
             cat << EOF > Caddyfile
             ${{ secrets.DOMAIN_NAME }} {
                 reverse_proxy backend:5000
             }
             EOF
-            
+
             echo "Writing docker-compose.yml..."
             cat << EOF > docker-compose.yml
             version: '3.8'
@@ -91,7 +133,7 @@ jobs:
                   - "443:443"
                 volumes:
                   - ./Caddyfile:/etc/caddy/Caddyfile
-                  - caddy_data:/data 
+                  - caddy_data:/data
                   - caddy_config:/config
               backend:
                 image: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:latest
@@ -104,7 +146,7 @@ jobs:
               caddy_data:
               caddy_config:
             EOF
-            
+
             echo "Writing .env file dynamically..."
             cat << EOF > .env
             PORT=5000
@@ -120,19 +162,17 @@ jobs:
             AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
             AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
             S3_BUCKET_NAME=$S3_BUCKET_NAME
-            SQS_QUEUE_URL=$SQS_QUEUE_URL
             VITE_FRONTEND_URL=$VITE_FRONTEND_URL
             EOF
-            
-            # Secure the .env file so only the server owner can read it
+
             chmod 600 .env
-            
+
             echo "Authenticating EC2 with AWS ECR..."
             aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-            
+
             echo "Pulling latest image and deploying..."
-            docker-compose pull
-            docker-compose up -d
+            docker compose pull
+            docker compose up -d
 
   notify:
     name: Deployment Notification
