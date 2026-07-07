@@ -104,11 +104,12 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          LOAD_TEST_MODE: ${{ secrets.LOAD_TEST_MODE }}
         with:
           host: ${{ secrets.EC2_HOST_IP }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: MONGO_URI,REDIS_URL,JWT_SECRET,JWT_EXPIRES_IN,STRIPE_SECRET_KEY,STRIPE_WEBHOOK_SECRET,VITE_FRONTEND_URL,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,S3_BUCKET_NAME
+          envs: MONGO_URI,REDIS_URL,JWT_SECRET,JWT_EXPIRES_IN,STRIPE_SECRET_KEY,STRIPE_WEBHOOK_SECRET,VITE_FRONTEND_URL,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,S3_BUCKET_NAME,LOAD_TEST_MODE
           script: |
             mkdir -p concurrentbook-server
             cd concurrentbook-server
@@ -171,6 +172,7 @@ jobs:
             AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
             S3_BUCKET_NAME=$S3_BUCKET_NAME
             VITE_FRONTEND_URL=$VITE_FRONTEND_URL
+            LOAD_TEST_MODE=$LOAD_TEST_MODE
             EOF
 
             chmod 600 .env

@@ -4,7 +4,7 @@ import redisClient from '../config/redis.js';
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10, // 10 login/register attempts per 15 min per IP
+  max: process.env.LOAD_TEST_MODE === 'true' ? 5000 : 10, // TEMP: raised for load testing // 10 login/register attempts per 15 min per IP
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many attempts. Please try again in a few minutes.' },
