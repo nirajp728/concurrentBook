@@ -115,6 +115,12 @@ jobs:
 
             echo "Writing Caddyfile for SSL routing..."
             cat << EOF > Caddyfile
+            {
+                servers {
+                    protocols h1 h2
+                }
+            }
+
             ${{ secrets.DOMAIN_NAME }} {
                 reverse_proxy backend:5000
             }
