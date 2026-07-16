@@ -4,6 +4,7 @@ A full-stack, production-deployed ticket booking system built to solve one core 
 
 **Live demo:** `https://main.d1349gw0nhkkde.amplifyapp.com/` *(backend infrastructure is torn down between test sessions to control cost — see [Deployment](#deployment--infrastructure))*
 
+Note:- The deployment is taken down from AWS temporarily as i dont want to incur unnecesary costs.
 ---
 
 ## Table of Contents
